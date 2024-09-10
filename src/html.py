@@ -3,7 +3,7 @@ import re
 
 
 def parse(source: str) -> dom.Node:
-    "Takes HTML source code, returns DOM Tree."
+    "Parses HTML source string into DOM tree."
     nodes = Parser(source, 0)._parse_nodes()
 
     if len(nodes) == 1:

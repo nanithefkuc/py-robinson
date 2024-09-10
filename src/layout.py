@@ -1,6 +1,5 @@
 import style
-from css.utils import color, units
-from css import css
+import css
 from functools import reduce
 import collections.abc as c
 
@@ -93,7 +92,7 @@ class LayoutBox:
         return f"Layout(dimensions={self.dimensions}, box_type={self.box_type}, children={self.children})"
 
     @staticmethod
-    def _new(box_type: BoxType.__subclasses__) -> 'LayoutBox':
+    def _new(box_type: BoxType) -> 'LayoutBox':
         return LayoutBox(Dimensions._default(), box_type, [])
     
     def _get_style_node(self) -> style.StyledNode:
@@ -118,10 +117,10 @@ class LayoutBox:
     def _calculate_block_width(self, containing_block: Dimensions):
         style = self._get_style_node()
 
-        auto = css.Keyword("auto")
+        auto = css.Value(keyword="auto")
         width = style.value("width") or auto
 
-        zero = css.Length(0.0)
+        zero = css.Value(length=(0.0, css.Px()))
 
         margin_left = style.lookup("margin-left", "margin", zero)
         margin_right = style.lookup("margin-right", "margin", zero)
@@ -144,33 +143,33 @@ class LayoutBox:
 
         if width != auto and total > containing_block.content.width:
             if margin_left == auto:
-                margin_left = css.Length(0.0)
+                margin_left = css.Value(length=(0.0, css.Px()))
             if margin_right == auto:
-                margin_right = css.Length(0.0)
+                margin_right = css.Value(length=(0.0, css.Px()))
 
         underflow = containing_block.content.width - total
 
         match (width == auto, margin_left == auto, margin_right == auto):
             case (False, False, False):
-                margin_right = css.Length(margin_right.to_px() + underflow)
+                margin_right = css.Value(length=(margin_right.to_px() + underflow, css.Px()))
             case (False, False, True):
-                margin_right = css.Length(underflow)
+                margin_right = css.Value(length=(underflow, css.Px()))
             case (False, True, False):
-                margin_left = css.Length(underflow)
+                margin_left = css.Value(length=(underflow, css.Px()))
             case (False, True, True):
-                margin_left = css.Length(underflow / 2.0)
-                margin_right = css.Length(underflow / 2.0)
+                margin_left = css.Value(length=(underflow / 2.0, css.Px()))
+                margin_right = css.Value(length=(underflow / 2.0, css.Px()))
             case (True, _, _):
                 if margin_left == auto:
-                    margin_left = css.Length(0.0)
+                    margin_left = css.Value(length=(0.0, css.Px()))
                 if margin_right == auto:
-                    margin_right = css.Length(0.0)
+                    margin_right = css.Value(length=(0.0, css.Px()))
 
                 if underflow >= 0.0:
-                    width = css.Length(underflow)
+                    width = css.Value(length=(underflow, css.Px()))
                 else:
-                    width = css.Length(0.0)
-                    margin_right = css.Length(margin_right.to_px() + underflow)
+                    width = css.Value(length=(0.0, css.Px()))
+                    margin_right = css.Value(length=(margin_right.to_px() + underflow, css.Px()))
 
         d = self.dimensions
         d.content.width = width.to_px()
@@ -188,7 +187,7 @@ class LayoutBox:
         styled_node = self._get_style_node()
         d = self.dimensions
 
-        zero = css.Length(0.0)
+        zero = css.Value(length=(0.0, css.Px()))
 
         d.margin.top = styled_node.lookup("margin-top", "margin", zero).to_px()
         d.margin.bottom = styled_node.lookup("margin-bottom", "margin", zero).to_px()
@@ -220,7 +219,7 @@ class LayoutBox:
             if self.children and isinstance(self.children[-1].box_type, AnonymousBlock):
                 return self.children[-1]
             else:
-                new_child = LayoutBox._new(AnonymousBlock)
+                new_child = LayoutBox._new(AnonymousBlock())
                 self.children.append(new_child)
                 return self.children[-1]
         else:
@@ -235,21 +234,22 @@ def layout_tree(node: style.StyledNode, containing_block: Dimensions) -> LayoutB
     return root_box
 
 def _build_layout_tree(style_node: style.StyledNode) -> LayoutBox:
+    root: LayoutBox # Just to get mypy to stfu
     match style_node.display():
-        case style.Display.Block:
+        case style.DisplayBlock:
             root = LayoutBox._new(BlockNode(style_node))
-        case style.Display.Inline:
+        case style.DisplayInline:
             root = LayoutBox._new(InlineNode(style_node))
-        case style.Display.Null:
+        case style.DisplayNone:
             raise ValueError(f"Root node has display: None.")
         
     for child in style_node.children:
         match child.display():
-            case style.Display.Block:
+            case style.DisplayBlock:
                 root.children.append(_build_layout_tree(child))
-            case style.Display.Inline:
+            case style.DisplayInline:
                 root._get_inline_container().children.append(_build_layout_tree(child))
-            case style.Display.Null:
+            case style.DisplayNone:
                 pass
 
     return root
